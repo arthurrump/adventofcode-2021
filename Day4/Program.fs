@@ -61,20 +61,15 @@ markedBoards
 
 #else
 
-let mutable markedBoards = boards
-let mutable lastNumber = 0
-let mutable nextNumbers = numbers
-while not (markedBoards |> List.forall Board.hasWon) do
-    markedBoards <- 
-        markedBoards 
-        |> List.filter (not << Board.hasWon) 
-        |> List.map (Board.markNumber nextNumbers.Head)
-    lastNumber <- nextNumbers.Head
-    nextNumbers <- nextNumbers.Tail
+let rec findLastWinningBoard boards (numbers: int list) =
+    let boards = boards |> List.map (Board.markNumber numbers.Head)
+    if boards |> List.forall Board.hasWon then
+        (boards |> List.exactlyOne, numbers.Head)
+    else
+        findLastWinningBoard (boards |> List.filter (not << Board.hasWon)) (numbers.Tail)
 
-markedBoards 
-|> List.exactlyOne
-|> fun board -> Board.unmarkedSum board * lastNumber
+findLastWinningBoard boards numbers 
+|> fun (board, lastNumber) -> Board.unmarkedSum board * lastNumber
 |> printfn "%d"
 
 #endif
