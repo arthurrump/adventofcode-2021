@@ -1,22 +1,30 @@
 ﻿open System
 open System.IO
 
-let initialFish =
-    File.ReadAllText("input.txt").Split(",") |> Array.toList |> List.map int
+module Array =
+    let updateWith index f (array: 't[]) =
+        Array.updateAt index (f (array[index])) array
 
-let step fish =
-    let newFishCount = fish |> List.filter (fun f -> f = 0) |> List.length
-    fish 
-    |> List.map (fun f -> if f = 0 then 6 else f - 1) 
-    |> List.append (List.init newFishCount (fun _ -> 8))
+let initialFish =
+    File.ReadAllText("input.txt").Split(",") 
+    |> Array.map int
+    |> Array.fold (fun arr i -> arr |> Array.updateAt i (arr.[i] + 1I)) (Array.create 9 0I)
+
+let step (fish: bigint[]) =
+    let newFishCount = fish[0]
+    Array.append (fish |> Array.tail) [| newFishCount |]
+    |> Array.updateWith 6 (fun i -> i + newFishCount)
 
 let rec loop until day fish =
     if day < until then
-        printfn "Day %d: %d fish" day (fish |> List.length)
         loop until (day + 1) (step fish)
     else
         fish
 
+#if part1
 loop 80 0 initialFish
-|> List.length
-|> printfn "%d"
+#else
+loop 256 0 initialFish
+#endif
+|> Array.sum
+|> printfn "%O"
