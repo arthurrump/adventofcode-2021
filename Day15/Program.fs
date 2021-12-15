@@ -1,45 +1,61 @@
 ﻿open System
+open System.Collections.Generic
 open System.IO
 
-let riskMap =
+let riskmap =
     File.ReadAllLines("input.txt")
     |> Array.map (fun line ->
         line.ToCharArray() 
         |> Array.map (fun c -> int c - int '0'))
 
 let dijkstra (riskmap: int[][]) =
-    let rec step destination current visited distances =
-        if destination = current then
-            distances
-        else
-            let (y, x) = current
-            let currentDistance = distances |> Map.find (y, x)
-            let neighbours = 
-                [ if y < riskmap.Length - 1 && not (visited |> Set.contains (y + 1, x)) then yield (y + 1, x)
-                  if x < riskmap[0].Length - 1 && not (visited |> Set.contains (y, x + 1)) then yield (y, x + 1) ]
-            let distances = 
-                neighbours 
-                |> List.fold (fun distances (y, x) -> 
-                    let edge = riskmap[y][x]
-                    match distances |> Map.tryFind (y, x) with
-                    | Some d when d > currentDistance + edge -> 
-                        distances |> Map.add (y, x) (currentDistance + edge)
-                    | None ->
-                        distances |> Map.add (y, x) (currentDistance + edge)
-                    | _ ->
-                        distances) distances
-            let visited = visited |> Set.add current
-            let current = 
-                distances 
-                |> Map.filter (fun coord _ -> not (visited |> Set.contains coord)) 
-                |> Map.toSeq
-                |> Seq.minBy snd 
-                |> fst
-            step destination current visited distances
-    let current = (0, 0)
     let destination = (riskmap.Length - 1, riskmap[0].Length - 1)
-    let distances = step destination current Set.empty (Map.empty |> Map.add current 0)
-    distances |> Map.find destination
+    let unvisited = PriorityQueue()
+    let distances: voption<int>[][] = [| for _ in 0..(riskmap.Length - 1) -> Array.create riskmap[0].Length ValueNone |]
+    let mutable current = (0, 0)
+    distances[0][0] <- ValueSome 0
+    unvisited.Enqueue(current, 0)
+    while current <> destination do
+        current <- unvisited.Dequeue()
+        let (y, x) = current
+        let currentDistance = distances[y][x] |> ValueOption.get
+        let neighbours = 
+            [ (y + 1, x); (y - 1, x); (y, x + 1); (y, x - 1) ] 
+            |> List.filter (fun (y, x) -> y >= 0 && y < riskmap.Length && x >= 0 && x < riskmap[y].Length)
+        for (ny, nx) in neighbours do
+            let edge = riskmap[ny][nx]
+            let dist = currentDistance + edge
+            match distances[ny][nx] with
+            | ValueSome d when d > dist ->
+                distances[ny][nx] <- ValueSome dist
+                unvisited.Enqueue((ny, nx), dist)
+            | ValueNone ->
+                distances[ny][nx] <- ValueSome dist
+                unvisited.Enqueue((ny, nx), dist)
+            | _ -> 
+                ()
+    distances[fst destination][snd destination] |> ValueOption.get
 
-dijkstra riskMap
+#if part1
+
+dijkstra riskmap
 |> printfn "%d"
+
+#else
+
+let extendedRiskmap =
+    [| for yi in 0..4 do
+        for y in 0..(riskmap.Length - 1) ->
+            [| for xi in 0..4 do
+                for x in 0..(riskmap[0].Length - 1) ->
+                    (riskmap[y][x] + yi + xi - 1) % 9 + 1 |] |]
+
+// for row in extendedRiskmap do
+//     for cell in row do
+//         printf "%d" cell
+//     printfn ""
+
+dijkstra extendedRiskmap
+|> printfn "%d"
+
+#endif
