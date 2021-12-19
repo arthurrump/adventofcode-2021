@@ -43,6 +43,9 @@ let scanners =
 let distanceSquared (BeaconMeasurement (ox, oy, oz)) (BeaconMeasurement (x, y, z)) =
     float (x - ox) ** 2 + float (y - oy) ** 2 + float (z - oz) ** 2
 
+let distanceManhattan (ox, oy, oz)  (x, y, z) =
+    abs (x - ox) + abs (y - oy) + abs (z - oz)
+
 let direction (BeaconMeasurement (ox, oy, oz)) (BeaconMeasurement (x, y, z)) =
     (x - ox), (y - oy), (z - oz)
 
@@ -63,6 +66,7 @@ let rotationFunctions =
       fun (x, y, z) -> (z, x, y)
       fun (x, y, z) -> (z, y, x) ]
     |> Seq.collect (fun f -> flips |> Seq.map (fun flip -> flip >> f))
+    |> Seq.toList
 
 let beaconDistances originBeacon otherMeasurements =
     otherMeasurements |> Set.map (direction originBeacon)
@@ -74,16 +78,16 @@ let findOverlap m1 m2 =
     let m1BeaconDistanceMap = beaconDistanceMap m1
     let m2BeaconDistanceMap = beaconDistanceMap m2
     Seq.allPairs m1BeaconDistanceMap m2BeaconDistanceMap
-    |> Seq.collect (fun maps -> seq { for r in rotationFunctions -> (r, maps)})
+    |> Seq.collect (fun maps -> seq { for r in rotationFunctions -> (r, maps) })
     |> Seq.tryPick (fun (rotation, ((origin1, distances1), (origin2, distances2))) ->
         if Set.intersect distances1 (distances2 |> Set.map rotation) |> Set.count >= 11
         then Some (origin1, origin2, rotation)
         else None)
 
 let unifyScanners (scanners: Scanner list) =
-    let rec unifyScanners unifiedMeasurements scannersTodo =
+    let rec unifyScanners unifiedMeasurements scannerPositions scannersTodo =
         if scannersTodo |> Set.isEmpty then
-            unifiedMeasurements
+            unifiedMeasurements, scannerPositions
         else
             let scanner, (unifiedBeaconCoords, scannerBeaconCoords, rotation) =
                 scannersTodo
@@ -94,9 +98,18 @@ let unifyScanners (scanners: Scanner list) =
             let diff = direction unifiedBeaconCoords (BeaconMeasurement.rotate rotation scannerBeaconCoords)
             let unifiedMeasurements = unifiedMeasurements |> Set.addAll (scanner.Measurements |> Set.map (BeaconMeasurement.rotate rotation >> sub diff))
             printfn "Found %d unified beacons" (unifiedMeasurements |> Set.count)
-            unifyScanners unifiedMeasurements (scannersTodo |> Set.remove scanner)
-    unifyScanners scanners[0].Measurements (set scanners[1..])
+            unifyScanners unifiedMeasurements (scannerPositions |> Map.add scanner.Id diff) (scannersTodo |> Set.remove scanner)
+    unifyScanners scanners[0].Measurements ([ 0, (0, 0, 0) ] |> Map.ofList) (set scanners[1..])
 
-unifyScanners scanners
+let unifiedBeacons, scannerPositions = unifyScanners scanners
+
+#if part1
+unifiedBeacons
 |> Set.count
 |> printfn "%d"
+#else
+Seq.allPairs scannerPositions scannerPositions
+|> Seq.map (fun (KeyValue (_, s1), KeyValue (_, s2)) -> distanceManhattan s1 s2)
+|> Seq.max
+|> printfn "%d"
+#endif
